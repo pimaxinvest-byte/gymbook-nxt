@@ -102,6 +102,7 @@ export async function addExercise(data: {
   sets: number
   reps: string
   weightKg?: number
+  restSeconds?: number
   notes?: string
   orderIndex?: number
 }) {
@@ -120,6 +121,9 @@ export async function addExercise(data: {
     })
   }
 
+  // Compute orderIndex server-side to avoid stale client-prop race
+  const count = await prisma.workoutExercise.count({ where: { workoutId: data.workoutId } })
+
   // Create the WorkoutExercise link
   const workoutExercise = await prisma.workoutExercise.create({
     data: {
@@ -128,11 +132,13 @@ export async function addExercise(data: {
       sets: data.sets,
       reps: data.reps,
       weightKg: data.weightKg,
+      restSeconds: data.restSeconds,
       notes: data.notes,
-      orderIndex: data.orderIndex ?? 0,
+      orderIndex: count,
     },
   })
 
+  revalidatePath('/trainer/training')
   return workoutExercise
 }
 

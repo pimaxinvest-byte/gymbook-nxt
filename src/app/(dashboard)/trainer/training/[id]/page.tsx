@@ -1,6 +1,8 @@
 import { getProgramById } from '@/features/training/actions'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import AddWorkoutButton from './AddWorkoutButton'
+import AddExerciseButton from './AddExerciseButton'
 
 const DAY_LABEL: Record<string, string> = {
   MONDAY: 'Lunes', TUESDAY: 'Martes', WEDNESDAY: 'Miércoles',
@@ -43,13 +45,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-text">Sesiones semanales</h2>
-          <button
-            className="btn-secondary btn-sm cursor-pointer opacity-50"
-            disabled
-            title="Próximamente"
-          >
-            + Añadir sesión
-          </button>
+          <AddWorkoutButton programId={program.id} />
         </div>
 
         {program.workouts.length === 0 ? (
@@ -89,6 +85,8 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
                     ))}
                   </div>
                 )}
+
+                <AddExerciseButton workoutId={w.id} exerciseCount={w.exercises.length} />
               </div>
             ))}
           </div>
