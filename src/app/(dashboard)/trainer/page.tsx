@@ -31,19 +31,35 @@ async function getDashboardData(trainerId: string) {
     where: { trainerId, scheduledAt: { gte: thisWeekStart } },
   })
 
-  return { clientCount, upcomingSessions, recentClients, sessionsThisWeek }
+  const creditsSoldResult = await prisma.userCredit.aggregate({
+    where: { client: { trainerId } },
+    _sum: { totalCredits: true },
+  }).catch(() => ({ _sum: { totalCredits: 0 } }))
+  const creditsSold = creditsSoldResult._sum.totalCredits ?? 0
+
+  const clientsWithoutPlan = await prisma.client.count({
+    where: {
+      trainerId,
+      isActive: true,
+      trainingPrograms: { none: { status: 'ACTIVE' } },
+    },
+  }).catch(() => 0)
+
+  return { clientCount, upcomingSessions, recentClients, sessionsThisWeek, creditsSold, clientsWithoutPlan }
 }
 
 export default async function TrainerDashboardPage() {
   const session = await auth()
   const trainerId = session?.user?.id ?? ''
 
-  const { clientCount, upcomingSessions, recentClients, sessionsThisWeek } =
+  const { clientCount, upcomingSessions, recentClients, sessionsThisWeek, creditsSold, clientsWithoutPlan } =
     await getDashboardData(trainerId).catch(() => ({
       clientCount: 0,
       upcomingSessions: [],
       recentClients: [],
       sessionsThisWeek: 0,
+      creditsSold: 0,
+      clientsWithoutPlan: 0,
     }))
 
   const name = session?.user?.name ?? 'Trainer'
@@ -51,8 +67,8 @@ export default async function TrainerDashboardPage() {
   const STATS = [
     { label: 'Clientes Activos', value: clientCount.toString(), delta: 'total', up: true, accent: '#3B82F6', icon: '◈' },
     { label: 'Sesiones Esta Semana', value: sessionsThisWeek.toString(), delta: `${upcomingSessions.length} próximas`, up: true, accent: '#EAB308', icon: '◫' },
-    { label: 'Créditos Vendidos', value: '—', delta: 'próximamente', up: true, accent: '#22C55E', icon: '◆' },
-    { label: 'Clientes sin plan', value: '—', delta: 'próximamente', up: false, accent: '#A1A1AA', icon: '◉' },
+    { label: 'Créditos Vendidos', value: creditsSold.toString(), delta: 'total acumulado', up: true, accent: '#22C55E', icon: '◆' },
+    { label: 'Clientes sin plan', value: clientsWithoutPlan.toString(), delta: clientsWithoutPlan > 0 ? 'necesitan programa' : 'todos con plan ✓', up: clientsWithoutPlan === 0, accent: clientsWithoutPlan > 0 ? '#EF4444' : '#A1A1AA', icon: '◉' },
   ]
 
   return (
