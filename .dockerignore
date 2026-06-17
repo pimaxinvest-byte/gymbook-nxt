@@ -1,0 +1,13 @@
+# Exclude user home directories accidentally tracked
+OneDrive/
+AppData/
+Documents/
+Downloads/
+
+# Build artifacts
+.next/
+node_modules/
+
+# Dev
+.env*.local
+*.log
