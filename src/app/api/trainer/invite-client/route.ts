@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { sendWhatsApp } from '@/lib/whatsapp'
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -13,10 +14,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Email requerido' }, { status: 400 })
   }
 
-  // Find the user by email
   const targetUser = await prisma.user.findUnique({
     where: { email: email.toLowerCase().trim() },
-    include: { clientRecord: true },
+    include: {
+      clientRecord: true,
+      clientProfile: { select: { phone: true } },
+    },
   })
 
   if (!targetUser) {
@@ -33,7 +36,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Check if already linked to this trainer
   if (targetUser.clientRecord?.trainerId === session.user.id) {
     return NextResponse.json(
       { error: 'Este cliente ya está vinculado a tu cuenta.' },
@@ -41,7 +43,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Create or update Client record
   const client = await prisma.client.upsert({
     where: { userId: targetUser.id },
     create: {
@@ -55,6 +56,20 @@ export async function POST(req: NextRequest) {
       isActive:  true,
     },
   })
+
+  // Notify client via WhatsApp if they have a phone number
+  const phone = targetUser.clientProfile?.phone
+  if (phone) {
+    const trainerName = session.user.name ?? 'Tu entrenador'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gymbook.app'
+    await sendWhatsApp(
+      phone,
+      `¡Hola ${targetUser.name ?? ''}! 👋\n\n` +
+      `*${trainerName}* te ha añadido como cliente en GymBook NXT.\n\n` +
+      `Ya puedes acceder a tu programa de entrenamiento y plan nutricional:\n${appUrl}\n\n` +
+      `_GymBook NXT — Tu entrenamiento, organizado._`
+    ).catch((err) => console.error('[WhatsApp] Error sending notification:', err))
+  }
 
   return NextResponse.json({ ok: true, clientId: client.id })
 }
