@@ -2,10 +2,9 @@ import { getProgramById } from '@/features/training/actions'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
-const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-const WORKOUT_TYPE_LABELS: Record<string, string> = {
-  STRENGTH: 'Fuerza', CARDIO: 'Cardio', HIIT: 'HIIT',
-  MOBILITY: 'Movilidad', SPORT: 'Deporte', REST: 'Descanso',
+const DAY_LABEL: Record<string, string> = {
+  MONDAY: 'Lunes', TUESDAY: 'Martes', WEDNESDAY: 'Miércoles',
+  THURSDAY: 'Jueves', FRIDAY: 'Viernes', SATURDAY: 'Sábado', SUNDAY: 'Domingo',
 }
 
 export default async function ProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,8 +33,8 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
             </p>
             {program.description && <p className="text-text-secondary text-sm mt-2">{program.description}</p>}
           </div>
-          <span className={`badge-${program.status === 'ACTIVE' ? 'success' : 'muted'}`}>
-            {program.status === 'ACTIVE' ? 'activo' : 'inactivo'}
+          <span className={`badge-${program.status === 'ACTIVE' ? 'success' : 'warning'}`}>
+            {program.status === 'ACTIVE' ? 'activo' : program.status?.toLowerCase() ?? 'inactivo'}
           </span>
         </div>
       </div>
@@ -67,11 +66,11 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
                       className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold"
                       style={{ background: 'rgba(59,130,246,.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,.2)' }}
                     >
-                      {w.dayOfWeek}
+                      {DAY_LABEL[w.dayOfWeek]?.slice(0, 3) ?? '—'}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-text">{w.name}</p>
-                      <p className="text-[10px] font-mono text-text-muted">{DAY_NAMES[w.dayOfWeek]} · {WORKOUT_TYPE_LABELS[w.type] ?? w.type}</p>
+                      <p className="text-[10px] font-mono text-text-muted">{DAY_LABEL[w.dayOfWeek] ?? w.dayOfWeek ?? '—'}</p>
                     </div>
                   </div>
                   <span className="text-xs text-text-muted">{w.exercises.length} ejercicios</span>
@@ -81,10 +80,10 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
                   <div className="space-y-1">
                     {w.exercises.map((ex: any) => (
                       <div key={ex.id} className="flex items-center justify-between px-3 py-2 rounded-md" style={{ background: 'rgb(26,26,26)' }}>
-                        <span className="text-sm text-text">{ex.name}</span>
+                        <span className="text-sm text-text">{ex.exercise?.name ?? '—'}</span>
                         <span className="text-xs font-mono text-text-muted">
                           {ex.sets}×{ex.reps}
-                          {ex.weight ? ` · ${ex.weight}kg` : ''}
+                          {ex.weightKg ? ` · ${ex.weightKg}kg` : ''}
                         </span>
                       </div>
                     ))}

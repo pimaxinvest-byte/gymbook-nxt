@@ -1,7 +1,10 @@
 import { getMyPrograms } from '@/features/training/actions'
 import Link from 'next/link'
 
-const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_LABEL: Record<string, string> = {
+  MONDAY: 'Lun', TUESDAY: 'Mar', WEDNESDAY: 'Mié',
+  THURSDAY: 'Jue', FRIDAY: 'Vie', SATURDAY: 'Sáb', SUNDAY: 'Dom',
+}
 
 export default async function TrainingPage() {
   const programs = await getMyPrograms().catch(() => [])
@@ -43,8 +46,8 @@ export default async function TrainingPage() {
                   <p className="text-sm font-semibold text-text group-hover:text-primary transition-colors">{p.name}</p>
                   <p className="text-xs text-text-muted mt-0.5">{p.client?.user?.name ?? 'Sin cliente'}</p>
                 </div>
-                <span className={`badge-${p.isActive ? 'success' : 'muted'} text-[10px]`}>
-                  {p.isActive ? 'activo' : 'inactivo'}
+                <span className={`badge-${p.status === 'ACTIVE' ? 'success' : 'muted'} text-[10px]`}>
+                  {p.status === 'ACTIVE' ? 'activo' : p.status?.toLowerCase() ?? 'inactivo'}
                 </span>
               </div>
 
@@ -55,7 +58,7 @@ export default async function TrainingPage() {
                 {p.workouts?.length > 0 && (
                   <>
                     <span>·</span>
-                    <span>{p.workouts.map((w: any) => DAY_NAMES[w.dayOfWeek]).join(', ')}</span>
+                    <span>{p.workouts.map((w: any) => DAY_LABEL[w.dayOfWeek] ?? w.dayOfWeek).join(', ')}</span>
                   </>
                 )}
               </div>

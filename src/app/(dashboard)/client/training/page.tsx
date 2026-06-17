@@ -135,8 +135,8 @@ export default async function ClientTrainingPage() {
                             <span className="text-[10px] font-mono text-text-muted w-4">{i + 1}</span>
                             <div className="flex-1">
                               <p className="text-sm text-text">{we.exercise?.name ?? '—'}</p>
-                              {we.exercise?.muscleGroup && (
-                                <p className="text-[10px] text-text-muted">{we.exercise.muscleGroup}</p>
+                              {we.exercise?.muscleGroups?.length > 0 && (
+                                <p className="text-[10px] text-text-muted">{we.exercise.muscleGroups[0]}</p>
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs font-mono">
