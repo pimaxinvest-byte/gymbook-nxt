@@ -141,6 +141,9 @@
     @apply text-xs text-text-muted mt-0.5;
   }
 
+  .stat-delta-up   { @apply text-[10px] font-mono text-success mt-0.5; }
+  .stat-delta-down { @apply text-[10px] font-mono text-danger mt-0.5; }
+
   /* ── Inputs ───────────────────────────────────── */
   .input {
     @apply w-full px-3 py-2 rounded-md
@@ -162,6 +165,8 @@
   .input-error {
     @apply text-xs text-danger mt-0.5;
   }
+
+  .input-hint { @apply text-[11px] text-text-muted mt-1; }
 
   /* ── Nav items ────────────────────────────────── */
   .nav-section-label {

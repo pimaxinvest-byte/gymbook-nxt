@@ -31,20 +31,42 @@ const NAV = [
   },
 ]
 
+const CLIENT_NAV = [
+  {
+    section: 'Principal',
+    items: [
+      { href: '/client', label: 'Dashboard', icon: '▪' },
+      { href: '/client/training', label: 'Entrenamiento', icon: '◉' },
+      { href: '/client/progress', label: 'Progreso', icon: '◎' },
+      { href: '/client/nutrition', label: 'Nutrición', icon: '◈' },
+    ],
+  },
+  {
+    section: 'Comunicación',
+    items: [
+      { href: '/client/messages', label: 'Mensajes', icon: '◫' },
+    ],
+  },
+]
+
 function SidebarContent({
   activeHref,
   userName,
   userEmail,
   userInitial,
+  nav,
+  role,
 }: {
   activeHref: string
   userName: string
   userEmail: string
   userInitial: string
+  nav: typeof NAV
+  role: string
 }) {
-  // Active matching: exact for /trainer, prefix for nested routes
   function isActive(href: string) {
     if (href === '/trainer') return activeHref === '/trainer'
+    if (href === '/client') return activeHref === '/client'
     return activeHref === href || activeHref.startsWith(href + '/')
   }
 
@@ -70,7 +92,7 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        {NAV.map((section) => (
+        {nav.map((section) => (
           <div key={section.section}>
             <p className="nav-section-label">{section.section}</p>
             {section.items.map((item) => (
@@ -133,6 +155,8 @@ export default function DashboardLayout({
   const userName  = session?.user?.name  ?? 'Usuario'
   const userEmail = session?.user?.email ?? ''
   const userInitial = userName.charAt(0).toUpperCase()
+  const role = (session?.user as any)?.role ?? 'TRAINER'
+  const activeNav = role === 'CLIENT' ? CLIENT_NAV : NAV
 
   return (
     <div className="min-h-screen flex bg-bg">
@@ -143,6 +167,8 @@ export default function DashboardLayout({
           userName={userName}
           userEmail={userEmail}
           userInitial={userInitial}
+          nav={activeNav}
+          role={role}
         />
       </aside>
 
@@ -162,6 +188,8 @@ export default function DashboardLayout({
               userName={userName}
               userEmail={userEmail}
               userInitial={userInitial}
+              nav={activeNav}
+              role={role}
             />
           </aside>
         </div>
