@@ -45,17 +45,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id
         token.role = (user as { role?: string }).role
+
+        // If CLIENT, load onboardingCompleted from DB (only on sign-in)
+        if ((user as any).role === 'CLIENT') {
+          const profile = await prisma.clientProfile.findUnique({
+            where: { userId: user.id as string },
+            select: { onboardingCompleted: true },
+          })
+          token.onboardingCompleted = profile?.onboardingCompleted ?? false
+        }
       }
+
+      // Allow client-side update({ onboardingCompleted: true }) to refresh the flag
+      if (trigger === 'update' && session?.onboardingCompleted !== undefined) {
+        token.onboardingCompleted = session.onboardingCompleted
+      }
+
       return token
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string
         session.user.role = token.role as string
+        session.user.onboardingCompleted = token.onboardingCompleted as boolean | undefined
       }
       return session
     },
@@ -71,6 +87,7 @@ declare module 'next-auth' {
     user: {
       id: string
       role: string
+      onboardingCompleted?: boolean
       email: string
       name?: string | null
       image?: string | null
@@ -78,10 +95,10 @@ declare module 'next-auth' {
   }
 }
 
-// @ts-nocheck - next-auth beta type augmentation
 declare module 'next-auth/jwt' {
   interface JWT {
     id?: string
     role?: string
+    onboardingCompleted?: boolean
   }
 }

@@ -30,8 +30,15 @@ export default auth((req) => {
       return NextResponse.redirect(new URL('/trainer', req.url))
     }
     // Onboarding guard: new clients must complete onboarding first
-    if (pathname.startsWith('/client') && pathname !== '/client/onboarding' && role === 'CLIENT') {
-      // Will be enhanced in Fase 2 to check onboardingCompleted flag
+    if (
+      pathname.startsWith('/client') &&
+      !pathname.startsWith('/client/onboarding') &&
+      role === 'CLIENT'
+    ) {
+      const onboardingCompleted = (session as any)?.user?.onboardingCompleted
+      if (onboardingCompleted === false) {
+        return NextResponse.redirect(new URL('/client/onboarding', req.url))
+      }
     }
   }
 
