@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 
 // ─── Create program ────────────────────────────
 export async function createTrainingProgram(data: {
-  clientId: string
+  clientId: string   // Client.id (junction table id)
   name: string
   description?: string
   durationWeeks: number
@@ -16,12 +16,11 @@ export async function createTrainingProgram(data: {
 
   const program = await prisma.trainingProgram.create({
     data: {
-      trainerId: session.user.id,
       clientId: data.clientId,
       name: data.name,
       description: data.description ?? '',
       durationWeeks: data.durationWeeks,
-      isActive: true,
+      status: 'ACTIVE',
     },
   })
 
@@ -35,9 +34,10 @@ export async function getMyPrograms(clientId?: string) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
+  // TrainingProgram belongs to Client which belongs to trainer
   return prisma.trainingProgram.findMany({
     where: {
-      trainerId: session.user.id,
+      client: { trainerId: session.user.id },
       ...(clientId ? { clientId } : {}),
     },
     include: {
@@ -59,20 +59,24 @@ export async function getProgramById(id: string) {
       client: { include: { user: { select: { name: true, id: true } } } },
       workouts: {
         include: {
-          exercises: { orderBy: { order: 'asc' } },
+          exercises: {
+            include: { exercise: true },
+            orderBy: { orderIndex: 'asc' },
+          },
         },
-        orderBy: { dayOfWeek: 'asc' },
+        orderBy: { orderIndex: 'asc' },
       },
     },
   })
 }
 
 // ─── Add workout to program ────────────────────
+// DayOfWeek enum: MONDAY | TUESDAY | WEDNESDAY | THURSDAY | FRIDAY | SATURDAY | SUNDAY
 export async function addWorkout(data: {
   programId: string
   name: string
-  dayOfWeek: number
-  type: string
+  dayOfWeek?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY'
+  notes?: string
 }) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
@@ -81,8 +85,8 @@ export async function addWorkout(data: {
     data: {
       programId: data.programId,
       name: data.name,
-      dayOfWeek: data.dayOfWeek,
-      type: data.type as any,
+      dayOfWeek: data.dayOfWeek ?? null,
+      notes: data.notes,
     },
   })
 
@@ -90,54 +94,83 @@ export async function addWorkout(data: {
   return workout
 }
 
-// ─── Add exercise to workout ───────────────────
+// ─── Add exercise to workout (via WorkoutExercise junction) ──
 export async function addExercise(data: {
   workoutId: string
-  name: string
+  name: string           // will upsert Exercise by name
+  muscleGroups?: string[]
   sets: number
   reps: string
-  weight?: number
+  weightKg?: number
   notes?: string
-  order: number
+  orderIndex?: number
 }) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
-  const exercise = await prisma.exercise.create({
+  // Find or create the Exercise catalog entry
+  let exercise = await prisma.exercise.findFirst({ where: { name: data.name } })
+  if (!exercise) {
+    exercise = await prisma.exercise.create({
+      data: {
+        name: data.name,
+        muscleGroups: data.muscleGroups ?? [],
+        equipment: [],
+      },
+    })
+  }
+
+  // Create the WorkoutExercise link
+  const workoutExercise = await prisma.workoutExercise.create({
     data: {
       workoutId: data.workoutId,
-      name: data.name,
+      exerciseId: exercise.id,
       sets: data.sets,
       reps: data.reps,
-      weight: data.weight,
+      weightKg: data.weightKg,
       notes: data.notes,
-      order: data.order,
+      orderIndex: data.orderIndex ?? 0,
     },
   })
 
-  return exercise
+  return workoutExercise
 }
 
-// ─── Log session (client) ─────────────────────
+// ─── Log a set during a workout session (client) ─────────────
 export async function logExercise(data: {
-  exerciseId: string
   workoutId: string
-  setsCompleted: number
-  repsCompleted: string
-  weightUsed?: number
+  workoutExerciseId: string
+  setNumber: number
+  repsCompleted?: number
+  weightKgUsed?: number
+  rpe?: number
   notes?: string
 }) {
   const session = await auth()
   if (!session?.user?.id) throw new Error('No autorizado')
 
+  // Find or create WorkoutSession for today
+  let workoutSession = await prisma.workoutSession.findFirst({
+    where: {
+      workoutId: data.workoutId,
+      completedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+    },
+  })
+
+  if (!workoutSession) {
+    workoutSession = await prisma.workoutSession.create({
+      data: { workoutId: data.workoutId },
+    })
+  }
+
   return prisma.exerciseLog.create({
     data: {
-      userId: session.user.id,
-      exerciseId: data.exerciseId,
-      workoutId: data.workoutId,
-      setsCompleted: data.setsCompleted,
+      sessionId: workoutSession.id,
+      workoutExerciseId: data.workoutExerciseId,
+      setNumber: data.setNumber,
       repsCompleted: data.repsCompleted,
-      weightUsed: data.weightUsed,
+      weightKgUsed: data.weightKgUsed,
+      rpe: data.rpe,
       notes: data.notes,
     },
   })

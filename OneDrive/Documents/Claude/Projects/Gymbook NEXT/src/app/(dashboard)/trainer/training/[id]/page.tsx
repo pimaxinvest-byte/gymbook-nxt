@@ -8,8 +8,9 @@ const WORKOUT_TYPE_LABELS: Record<string, string> = {
   MOBILITY: 'Movilidad', SPORT: 'Deporte', REST: 'Descanso',
 }
 
-export default async function ProgramDetailPage({ params }: { params: { id: string } }) {
-  const program = await getProgramById(params.id).catch(() => null)
+export default async function ProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const program = await getProgramById(id).catch(() => null)
   if (!program) notFound()
 
   return (

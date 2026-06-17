@@ -7,8 +7,9 @@ const DAY_NAMES = ['—', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MEAL_ORDER = { BREAKFAST: 0, SNACK: 1, LUNCH: 2, DINNER: 3 }
 const MEAL_LABELS: Record<string, string> = { BREAKFAST: 'Desayuno', LUNCH: 'Almuerzo', DINNER: 'Cena', SNACK: 'Snack' }
 
-export default async function NutritionPlanDetailPage({ params }: { params: { id: string } }) {
-  const plan = await getNutritionPlanById(params.id).catch(() => null)
+export default async function NutritionPlanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const plan = await getNutritionPlanById(id).catch(() => null)
   if (!plan) notFound()
 
   const meals = plan.weeklyPlan?.meals ?? []

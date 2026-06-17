@@ -6,26 +6,25 @@ import { revalidatePath } from 'next/cache'
 
 // ─── Create nutrition plan ─────────────────────
 export async function createNutritionPlan(data: {
-  clientId: string
+  clientId: string   // Client.id (junction table id)
   name: string
-  targetCalories: number
-  proteinG: number
-  carbsG: number
-  fatG: number
+  caloriesTarget: number
+  proteinGTarget: number
+  carbsGTarget: number
+  fatGTarget: number
 }) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
   const plan = await prisma.nutritionPlan.create({
     data: {
-      trainerId: session.user.id,
       clientId: data.clientId,
       name: data.name,
-      targetCalories: data.targetCalories,
-      proteinG: data.proteinG,
-      carbsG: data.carbsG,
-      fatG: data.fatG,
-      isActive: true,
+      caloriesTarget: data.caloriesTarget,
+      proteinGTarget: data.proteinGTarget,
+      carbsGTarget: data.carbsGTarget,
+      fatGTarget: data.fatGTarget,
+      status: 'ACTIVE',
     },
   })
 
@@ -41,12 +40,12 @@ export async function getMyNutritionPlans(clientId?: string) {
 
   return prisma.nutritionPlan.findMany({
     where: {
-      trainerId: session.user.id,
+      client: { trainerId: session.user.id },
       ...(clientId ? { clientId } : {}),
     },
     include: {
       client: { include: { user: { select: { name: true } } } },
-      weeklyPlan: { include: { meals: true } },
+      weeklyPlans: { include: { mealEntries: true }, take: 1 },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -61,86 +60,62 @@ export async function getNutritionPlanById(id: string) {
     where: { id },
     include: {
       client: { include: { user: { select: { name: true, id: true } } } },
-      weeklyPlan: {
+      weeklyPlans: {
         include: {
-          meals: {
+          mealEntries: {
             include: { recipe: true },
             orderBy: [{ dayOfWeek: 'asc' }, { mealType: 'asc' }],
           },
         },
+        orderBy: { weekNumber: 'desc' },
+        take: 1,
       },
     },
   })
 }
 
 // ─── Generate weekly plan ──────────────────────
-// Feature clave: genera un plan semanal con comidas y recetas automáticamente
 export async function generateWeeklyPlan(planId: string) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
   const plan = await prisma.nutritionPlan.findUnique({
     where: { id: planId },
-    include: {
-      client: {
-        include: {
-          user: true,
-        },
-      },
-    },
   })
   if (!plan) throw new Error('Plan no encontrado')
 
-  // Get available recipes for this org
-  const recipes = await prisma.recipe.findMany({
-    where: { organizationId: plan.client.user.organizationId ?? '' },
-    take: 50,
+  // Get existing week count to number next plan
+  const weekCount = await prisma.weeklyMealPlan.count({
+    where: { nutritionPlanId: planId },
   })
 
-  // Simple round-robin recipe assignment per meal type per day
-  const DAYS = [1, 2, 3, 4, 5, 6, 7]
+  // Get available recipes
+  const recipes = await prisma.recipe.findMany({ take: 50 })
+
+  const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const
   const MEAL_TYPES = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const
-
-  // Delete existing weekly plan if any
-  if (plan.weeklyPlanId) {
-    await prisma.weeklyPlan.delete({ where: { id: plan.weeklyPlanId } })
-  }
-
-  const breakfastRecipes = recipes.filter(r => r.mealType === 'BREAKFAST' || r.mealType === null)
-  const lunchRecipes = recipes.filter(r => r.mealType === 'LUNCH' || r.mealType === null)
-  const dinnerRecipes = recipes.filter(r => r.mealType === 'DINNER' || r.mealType === null)
-  const snackRecipes = recipes.filter(r => r.mealType === 'SNACK' || r.mealType === null)
 
   const getRecipe = (arr: any[], day: number) => arr.length > 0 ? arr[day % arr.length] : null
 
-  const weeklyPlan = await prisma.weeklyPlan.create({
+  const weeklyPlan = await prisma.weeklyMealPlan.create({
     data: {
       nutritionPlanId: planId,
-      meals: {
-        create: DAYS.flatMap((day) =>
+      weekNumber: weekCount + 1,
+      name: `Semana ${weekCount + 1}`,
+      mealEntries: {
+        create: DAYS.flatMap((dayOfWeek, dayIndex) =>
           MEAL_TYPES.map((mealType) => {
-            const recipeMap = { BREAKFAST: breakfastRecipes, LUNCH: lunchRecipes, DINNER: dinnerRecipes, SNACK: snackRecipes }
-            const recipe = getRecipe(recipeMap[mealType], day)
+            const recipe = getRecipe(recipes, dayIndex)
             return {
-              dayOfWeek: day,
+              dayOfWeek,
               mealType,
               recipeId: recipe?.id ?? null,
-              name: recipe?.name ?? defaultMealName(mealType, day),
-              calories: Math.round(plan.targetCalories / 4),
-              proteinG: Math.round(plan.proteinG / 4),
-              carbsG: Math.round(plan.carbsG / 4),
-              fatG: Math.round(plan.fatG / 4),
+              customMealName: recipe ? null : defaultMealName(mealType, dayIndex),
             }
           })
         ),
       },
     },
-  })
-
-  // Link weekly plan to nutrition plan
-  await prisma.nutritionPlan.update({
-    where: { id: planId },
-    data: { weeklyPlanId: weeklyPlan.id },
   })
 
   revalidatePath(`/trainer/nutrition/${planId}`)
@@ -161,26 +136,31 @@ function defaultMealName(type: string, day: number): string {
 export async function logDailyIntake(data: {
   planId: string
   date: Date
-  calories: number
-  proteinG: number
-  carbsG: number
-  fatG: number
+  totalCalories: number
+  totalProteinG: number
+  totalCarbsG: number
+  totalFatG: number
   notes?: string
 }) {
   const session = await auth()
   if (!session?.user?.id) throw new Error('No autorizado')
 
   return prisma.dailyIntake.upsert({
-    where: { userId_date: { userId: session.user.id, date: data.date } },
-    update: { calories: data.calories, proteinG: data.proteinG, carbsG: data.carbsG, fatG: data.fatG, notes: data.notes },
+    where: { nutritionPlanId_date: { nutritionPlanId: data.planId, date: data.date } },
+    update: {
+      totalCalories: data.totalCalories,
+      totalProteinG: data.totalProteinG,
+      totalCarbsG: data.totalCarbsG,
+      totalFatG: data.totalFatG,
+      notes: data.notes,
+    },
     create: {
-      userId: session.user.id,
       nutritionPlanId: data.planId,
       date: data.date,
-      calories: data.calories,
-      proteinG: data.proteinG,
-      carbsG: data.carbsG,
-      fatG: data.fatG,
+      totalCalories: data.totalCalories,
+      totalProteinG: data.totalProteinG,
+      totalCarbsG: data.totalCarbsG,
+      totalFatG: data.totalFatG,
       notes: data.notes,
     },
   })

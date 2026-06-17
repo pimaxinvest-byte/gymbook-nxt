@@ -221,6 +221,72 @@
     box-shadow: 0 0 20px rgba(234,179,8,.15),
                 0 0 60px rgba(234,179,8,.04);
   }
+
+  /* ── Alert banners ────────────────────── */
+  .alert-success {
+    @apply flex items-center gap-2 px-3 py-2.5 rounded-md text-sm
+           bg-success/10 text-green-400 border border-success/20;
+  }
+  .alert-error {
+    @apply flex items-center gap-2 px-3 py-2.5 rounded-md text-sm
+           bg-danger/10 text-red-400 border border-danger/20;
+  }
+  .alert-warning {
+    @apply flex items-center gap-2 px-3 py-2.5 rounded-md text-sm
+           bg-warning/10 text-yellow-400 border border-warning/20;
+  }
+  .alert-info {
+    @apply flex items-center gap-2 px-3 py-2.5 rounded-md text-sm
+           bg-info/10 text-sky-400 border border-info/20;
+  }
+
+  /* ── Empty state ──────────────────────── */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-14 px-6
+           text-center bg-surface border border-dashed border-border-light
+           rounded-xl;
+  }
+  .empty-state-icon {
+    @apply w-12 h-12 rounded-xl flex items-center justify-center
+           bg-primary/8 border border-primary/15 text-primary text-xl mb-4;
+  }
+
+  /* ── Toggle switch ────────────────────── */
+  .toggle {
+    @apply relative inline-flex h-5 w-9 items-center rounded-full
+           transition-colors cursor-pointer flex-shrink-0
+           focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-primary/50;
+  }
+  .toggle-on  { @apply bg-primary; }
+  .toggle-off { @apply bg-border; }
+  .toggle-thumb {
+    @apply absolute top-0.5 h-4 w-4 rounded-full bg-white
+           transition-all duration-150;
+  }
+
+  /* ── Chip selector (goal/day picker) ─── */
+  .chip {
+    @apply px-3 py-2 rounded-md text-xs font-medium text-left
+           transition-all cursor-pointer border;
+  }
+  .chip-active {
+    @apply chip bg-primary/15 border-primary/40 text-primary-light;
+  }
+  .chip-inactive {
+    @apply chip bg-surface-2 border-border text-text-secondary
+           hover:border-border-light hover:text-text;
+  }
+
+  /* ── Breadcrumb ───────────────────────── */
+  .breadcrumb {
+    @apply flex items-center gap-2 text-[10px] font-mono
+           text-text-subtle uppercase tracking-widest mb-1;
+  }
+  .breadcrumb a, .breadcrumb span[role="link"] {
+    @apply cursor-pointer hover:text-primary transition-colors;
+  }
+  .breadcrumb-sep { @apply opacity-30; }
 }
 
 /* ── Dot-grid background ──────────────── */

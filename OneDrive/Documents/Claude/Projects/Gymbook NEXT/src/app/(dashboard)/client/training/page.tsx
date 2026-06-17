@@ -7,19 +7,25 @@ export default async function ClientTrainingPage() {
   const session = await auth()
   const userId = session?.user?.id ?? ''
 
-  const program = await prisma.trainingProgram.findFirst({
-    where: { clientId: userId, isActive: true },
-    include: {
-      workouts: {
-        orderBy: { dayOfWeek: 'asc' },
+  // Client.id ≠ User.id — look up the Client record first
+  const clientRecord = await prisma.client.findFirst({
+    where: { userId },
+    select: { id: true },
+  }).catch(() => null)
+
+  const program = clientRecord
+    ? await prisma.trainingProgram.findFirst({
+        where: { clientId: clientRecord.id, isActive: true },
         include: {
-          exercises: {
-            orderBy: { order: 'asc' },
+          workouts: {
+            orderBy: { dayOfWeek: 'asc' },
+            include: {
+              exercises: { orderBy: { order: 'asc' } },
+            },
           },
         },
-      },
-    },
-  }).catch(() => null)
+      }).catch(() => null)
+    : null
 
   const today = new Date().getDay()
 

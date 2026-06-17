@@ -1,6 +1,5 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
-import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
@@ -11,7 +10,6 @@ const loginSchema = z.object({
 })
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
   pages: {
     signIn: '/login',
@@ -31,9 +29,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
         })
-        if (!user || !user.password) return null
+        if (!user || !user.passwordHash) return null
 
-        const valid = await bcrypt.compare(parsed.data.password, user.password)
+        const valid = await bcrypt.compare(parsed.data.password, user.passwordHash)
         if (!valid) return null
 
         return {

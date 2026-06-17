@@ -61,21 +61,21 @@ export async function registerAction(data: RegisterInput) {
       data: {
         name,
         email,
-        password: hashedPw,
+        passwordHash: hashedPw,
         role: 'TRAINER',
+        isInitialOwner: isOwner,
         organizationId: org.id,
-        TrainerProfile: {
+        trainerProfile: {
           create: {
             bio: '',
             specialties: [],
-            isOwner,
           },
         },
       },
     })
   } else {
     // CLIENT: find trainer by code (email prefix) or default to first trainer
-    let trainer = trainerCode
+    const trainer = trainerCode
       ? await prisma.user.findFirst({
           where: { role: 'TRAINER', email: { startsWith: trainerCode } },
         })
@@ -87,17 +87,24 @@ export async function registerAction(data: RegisterInput) {
       data: {
         name,
         email,
-        password: hashedPw,
+        passwordHash: hashedPw,
         role: 'CLIENT',
         organizationId: trainer.organizationId,
-        ClientProfile: {
+        clientProfile: {
           create: {
-            trainerId: trainer.id,
-            goal: 'GENERAL_FITNESS',
+            fitnessGoal: 'GENERAL_FITNESS',
             fitnessLevel: 'BEGINNER',
             onboardingCompleted: false,
           },
         },
+      },
+    })
+
+    // Link client to trainer via Client junction table
+    await prisma.client.create({
+      data: {
+        trainerId: trainer.id,
+        userId: user.id,
       },
     })
 

@@ -1,2 +1,3 @@
-// Feature: progress — ver plan de fases
-export {}
+// Feature: progress
+export { saveProgressLog, getProgressHistory, getLatestMetrics } from './actions'
+

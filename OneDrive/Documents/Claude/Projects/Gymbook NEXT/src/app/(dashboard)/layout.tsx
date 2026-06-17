@@ -1,8 +1,9 @@
 'use client'
 
-// Fase 1: protección de ruta con NextAuth + rol. Por ahora: layout base.
-
 import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 
 const NAV = [
   {
@@ -30,12 +31,27 @@ const NAV = [
   },
 ]
 
-function SidebarContent({ activeHref }: { activeHref: string }) {
+function SidebarContent({
+  activeHref,
+  userName,
+  userEmail,
+  userInitial,
+}: {
+  activeHref: string
+  userName: string
+  userEmail: string
+  userInitial: string
+}) {
+  // Active matching: exact for /trainer, prefix for nested routes
+  function isActive(href: string) {
+    if (href === '/trainer') return activeHref === '/trainer'
+    return activeHref === href || activeHref.startsWith(href + '/')
+  }
+
   return (
     <>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-border flex items-center gap-2.5">
-        {/* Gold triangle marker — Voltaic Nocturne accent */}
         <span
           style={{
             width: 0, height: 0,
@@ -58,14 +74,10 @@ function SidebarContent({ activeHref }: { activeHref: string }) {
           <div key={section.section}>
             <p className="nav-section-label">{section.section}</p>
             {section.items.map((item) => (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
-                className={
-                  activeHref === item.href
-                    ? 'nav-item-active'
-                    : 'nav-item'
-                }
+                className={isActive(item.href) ? 'nav-item-active' : 'nav-item'}
               >
                 <span className="text-[10px] text-text-muted font-mono w-3.5 text-center flex-shrink-0">
                   {item.icon}
@@ -76,7 +88,7 @@ function SidebarContent({ activeHref }: { activeHref: string }) {
                     {item.badge}
                   </span>
                 )}
-              </a>
+              </Link>
             ))}
           </div>
         ))}
@@ -96,11 +108,11 @@ function SidebarContent({ activeHref }: { activeHref: string }) {
         <div className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface-2 cursor-pointer transition-colors">
           <div className="w-7 h-7 rounded-md bg-primary/20 border border-primary/30
                           flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-bold text-primary">T</span>
+            <span className="text-xs font-bold text-primary">{userInitial}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-text truncate">Trainer</p>
-            <p className="text-[10px] text-text-muted truncate">trainer@gymbook.dev</p>
+            <p className="text-xs font-medium text-text truncate">{userName}</p>
+            <p className="text-[10px] text-text-muted truncate">{userEmail}</p>
           </div>
           <span className="text-text-muted text-xs opacity-40">⋯</span>
         </div>
@@ -115,13 +127,23 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const activeHref = typeof window !== 'undefined' ? window.location.pathname : '/trainer'
+  const pathname = usePathname()
+  const { data: session } = useSession()
+
+  const userName  = session?.user?.name  ?? 'Usuario'
+  const userEmail = session?.user?.email ?? ''
+  const userInitial = userName.charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen flex bg-bg">
       {/* ── Desktop Sidebar ───────────────── */}
       <aside className="w-56 hidden lg:flex flex-col bg-surface border-r border-border flex-shrink-0">
-        <SidebarContent activeHref={activeHref} />
+        <SidebarContent
+          activeHref={pathname}
+          userName={userName}
+          userEmail={userEmail}
+          userInitial={userInitial}
+        />
       </aside>
 
       {/* ── Mobile Overlay ────────────────── */}
@@ -135,7 +157,12 @@ export default function DashboardLayout({
             className="absolute left-0 top-0 bottom-0 w-56 bg-surface border-r border-border flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <SidebarContent activeHref={activeHref} />
+            <SidebarContent
+              activeHref={pathname}
+              userName={userName}
+              userEmail={userEmail}
+              userInitial={userInitial}
+            />
           </aside>
         </div>
       )}

@@ -4,17 +4,23 @@ import Link from 'next/link'
 
 async function getDashboardData(trainerId: string) {
   const [clientCount, upcomingSessions, recentClients] = await Promise.all([
-    prisma.clientProfile.count({ where: { trainerId } }),
+    // Count via Client junction table
+    prisma.client.count({ where: { trainerId, isActive: true } }),
+    // Sessions via new Session model
     prisma.session.findMany({
       where: { trainerId, scheduledAt: { gte: new Date() } },
       include: { client: { include: { user: { select: { name: true } } } } },
       orderBy: { scheduledAt: 'asc' },
       take: 5,
     }),
-    prisma.clientProfile.findMany({
-      where: { trainerId },
-      include: { user: { select: { name: true, createdAt: true } }, UserCredit: { select: { balance: true } } },
-      orderBy: { user: { createdAt: 'desc' } },
+    // Recent clients via Client junction
+    prisma.client.findMany({
+      where: { trainerId, isActive: true },
+      include: {
+        user: { select: { name: true, createdAt: true } },
+        userCredits: { where: { status: 'ACTIVE' }, select: { remainingCredits: true }, take: 1 },
+      },
+      orderBy: { joinedAt: 'desc' },
       take: 5,
     }),
   ])
@@ -69,7 +75,6 @@ export default async function TrainerDashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {STATS.map((s) => (
           <div key={s.label} className="stat-card relative overflow-hidden">
-            {/* Accent line */}
             <div
               style={{
                 position: 'absolute', top: 0, left: 0, right: 0, height: 2,
@@ -170,11 +175,11 @@ export default async function TrainerDashboardPage() {
               {recentClients.map((c: any) => {
                 const nm = c.user.name ?? '—'
                 const initials = nm.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-                const credits = c.UserCredit?.[0]?.balance ?? 0
+                const credits = c.userCredits?.[0]?.remainingCredits ?? 0
                 return (
                   <Link
-                    key={c.userId}
-                    href={`/trainer/clients/${c.userId}`}
+                    key={c.id}
+                    href={`/trainer/clients/${c.id}`}
                     className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface-2 transition-colors cursor-pointer group"
                   >
                     <div

@@ -18,13 +18,15 @@ const config: Config = {
 
         // Backgrounds
         bg:       '#0A0A0A',
-        surface:  { DEFAULT: '#121212', 2: '#1A1A1A', 3: '#1E1E1E', 4: '#222222' },
+        surface:  { DEFAULT: '#121212', 2: '#1A1A1A', 3: '#1E1E1E', 4: '#222222', deep: '#0D0D0D' },
 
         // Text
         text: {
           DEFAULT:   '#F1F1F1',
           secondary: '#A1A1AA',
           muted:     '#71717A',
+          subtle:    '#52525B',  // mid-tone label
+          ghost:     '#3A3A3A',  // near-invisible hint
         },
 
         // Semantic
@@ -32,6 +34,10 @@ const config: Config = {
         warning: '#F59E0B',
         danger:  '#EF4444',
         info:    '#0EA5E9',
+
+        // Extended palette
+        'primary-light': '#93C5FD',  // active-state chip text on dark bg
+        purple:          '#A855F7',  // FFMI / biometric accent
 
         // Border
         border: { DEFAULT: '#27272A', light: '#3F3F46' },

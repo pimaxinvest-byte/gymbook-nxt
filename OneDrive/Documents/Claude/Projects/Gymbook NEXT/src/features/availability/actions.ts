@@ -5,7 +5,6 @@ import { auth } from '@/auth'
 import { revalidatePath } from 'next/cache'
 
 // ─── Set weekly availability ──────────────────
-// slots: [{dayOfWeek: 1, startTime: "09:00", endTime: "13:00"}, ...]
 export async function setAvailability(slots: { dayOfWeek: number; startTime: string; endTime: string }[]) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
@@ -20,6 +19,7 @@ export async function setAvailability(slots: { dayOfWeek: number; startTime: str
         startTime: s.startTime,
         endTime: s.endTime,
         isRecurring: true,
+        updatedAt: new Date(),
       })),
     })
   }
@@ -46,41 +46,55 @@ export async function getTrainerAvailability(trainerId: string) {
   })
 }
 
-// ─── Get upcoming sessions (booked slots) ─────
+// ─── Get upcoming sessions ─────────────────────
 export async function getUpcomingSessions() {
   const session = await auth()
   if (!session?.user?.id) throw new Error('No autorizado')
 
-  const where =
-    session.user.role === 'TRAINER'
-      ? { trainerId: session.user.id }
-      : { clientId: session.user.id }
+  if (session.user.role === 'TRAINER') {
+    return prisma.session.findMany({
+      where: { trainerId: session.user.id, scheduledAt: { gte: new Date() } },
+      include: {
+        trainer: { select: { name: true } },
+        client: { include: { user: { select: { name: true } } } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      take: 10,
+    })
+  } else {
+    // CLIENT: find their Client record first
+    const clientRecord = await prisma.client.findUnique({
+      where: { userId: session.user.id },
+    })
+    if (!clientRecord) return []
 
-  return prisma.session.findMany({
-    where: { ...where, scheduledAt: { gte: new Date() } },
-    include: {
-      trainer: { select: { name: true } },
-      client: { include: { user: { select: { name: true } } } },
-    },
-    orderBy: { scheduledAt: 'asc' },
-    take: 10,
-  })
+    return prisma.session.findMany({
+      where: { clientId: clientRecord.id, scheduledAt: { gte: new Date() } },
+      include: {
+        trainer: { select: { name: true } },
+        client: { include: { user: { select: { name: true } } } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      take: 10,
+    })
+  }
 }
 
 // ─── Book session ─────────────────────────────
 export async function bookSession(data: {
-  clientId: string
-  trainerId: string
+  clientId: string   // Client.id
+  trainerId: string  // User.id
   scheduledAt: Date
-  type: string
+  type?: string
   notes?: string
 }) {
   const session = await auth()
   if (!session?.user?.id) throw new Error('No autorizado')
 
-  // Deduct credit
-  const credit = await prisma.userCredit.findFirst({ where: { userId: data.clientId } })
-  if (!credit || credit.balance <= 0) throw new Error('Sin créditos disponibles')
+  const credit = await prisma.userCredit.findFirst({
+    where: { clientId: data.clientId, status: 'ACTIVE', remainingCredits: { gt: 0 } },
+  })
+  if (!credit) throw new Error('Sin créditos disponibles')
 
   const [newSession] = await prisma.$transaction([
     prisma.session.create({
@@ -88,14 +102,21 @@ export async function bookSession(data: {
         trainerId: data.trainerId,
         clientId: data.clientId,
         scheduledAt: data.scheduledAt,
-        type: data.type as any,
+        type: data.type ?? 'PERSONAL',
         status: 'SCHEDULED',
         notes: data.notes,
+        creditUsed: true,
+        updatedAt: new Date(),
       },
     }),
     prisma.userCredit.update({
       where: { id: credit.id },
-      data: { balance: credit.balance - 1 },
+      data: {
+        usedCredits: credit.usedCredits + 1,
+        remainingCredits: credit.remainingCredits - 1,
+        status: credit.remainingCredits - 1 <= 0 ? 'USED' : 'ACTIVE',
+        updatedAt: new Date(),
+      },
     }),
   ])
 

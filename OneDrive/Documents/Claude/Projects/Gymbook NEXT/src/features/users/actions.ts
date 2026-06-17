@@ -20,28 +20,32 @@ export async function saveOnboarding(data: {
   await prisma.clientProfile.update({
     where: { userId: session.user.id },
     data: {
-      goal: data.goal as any,
+      fitnessGoal: data.goal as any,
       fitnessLevel: data.level as any,
-      dietaryPreference: data.diet as any,
-      injuriesNotes: data.injuries || null,
-      initialWeight: data.weight ? parseFloat(data.weight) : null,
-      currentWeight: data.weight ? parseFloat(data.weight) : null,
-      height: data.height ? parseFloat(data.height) : null,
+      dietaryRestrictions: data.diet ? [data.diet] : [],
+      medicalNotes: data.injuries || null,
+      weightKg: data.weight ? parseFloat(data.weight) : null,
+      heightCm: data.height ? parseFloat(data.height) : null,
       onboardingCompleted: true,
     },
   })
 
   // Create initial ProgressLog if weight provided
   if (data.weight) {
-    await prisma.progressLog.create({
-      data: {
-        userId: session.user.id,
-        weight: parseFloat(data.weight),
-        bodyFat: null,
-        muscleMass: null,
-        notes: 'Medición inicial — onboarding',
-      },
+    // Find client record
+    const clientRecord = await prisma.client.findUnique({
+      where: { userId: session.user.id },
     })
+    if (clientRecord) {
+      await prisma.progressLog.create({
+        data: {
+          clientId: clientRecord.id,
+          date: new Date(),
+          weightKg: parseFloat(data.weight),
+          notes: 'Medición inicial — onboarding',
+        },
+      })
+    }
   }
 
   revalidatePath('/client')
@@ -52,13 +56,26 @@ export async function getMyClients() {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
-  return prisma.clientProfile.findMany({
-    where: { trainerId: session.user.id },
+  // Clients are linked via Client junction table
+  return prisma.client.findMany({
+    where: { trainerId: session.user.id, isActive: true },
     include: {
-      user: { select: { id: true, name: true, email: true, createdAt: true } },
-      UserCredit: { select: { balance: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true,
+          clientProfile: { select: { fitnessGoal: true, fitnessLevel: true } },
+        },
+      },
+      userCredits: {
+        where: { status: 'ACTIVE' },
+        select: { remainingCredits: true },
+        take: 1,
+      },
     },
-    orderBy: { user: { createdAt: 'desc' } },
+    orderBy: { joinedAt: 'desc' },
   })
 }
 
@@ -67,44 +84,41 @@ export async function getClientById(clientId: string) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
-  return prisma.clientProfile.findFirst({
-    where: { userId: clientId, trainerId: session.user.id },
+  return prisma.client.findFirst({
+    where: { id: clientId, trainerId: session.user.id },
     include: {
-      user: { select: { id: true, name: true, email: true, createdAt: true } },
-      UserCredit: { include: { creditPackage: true } },
-      trainingPrograms: { orderBy: { createdAt: 'desc' }, take: 3 },
-      nutritionPlans: { orderBy: { createdAt: 'desc' }, take: 1 },
-      progressLogs: { orderBy: { loggedAt: 'desc' }, take: 5 },
+      user: {
+        select: {
+          id: true, name: true, email: true, createdAt: true,
+          clientProfile: true,
+        },
+      },
+      userCredits: { include: { package: true }, where: { status: 'ACTIVE' } },
+      trainingPrograms: { orderBy: { createdAt: 'desc' }, take: 5 },
+      nutritionPlans:   { orderBy: { createdAt: 'desc' }, take: 2 },
+      progressLogs:     { orderBy: { date: 'desc' }, take: 5 },
+      photos:           { orderBy: { date: 'desc' }, take: 32 },
     },
   })
 }
 
 // ─── Assign credits ───────────────────────────
-export async function assignCredits(clientId: string, packageId: string, balance: number) {
+export async function assignCredits(clientId: string, packageId: string, totalCredits: number) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
-  const existing = await prisma.userCredit.findFirst({ where: { userId: clientId } })
-
-  if (existing) {
-    await prisma.userCredit.update({
-      where: { id: existing.id },
-      data: {
-        creditPackageId: packageId,
-        balance: existing.balance + balance,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      },
-    })
-  } else {
-    await prisma.userCredit.create({
-      data: {
-        userId: clientId,
-        creditPackageId: packageId,
-        balance,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      },
-    })
-  }
+  // clientId here is Client.id
+  await prisma.userCredit.create({
+    data: {
+      clientId,
+      packageId,
+      totalCredits,
+      usedCredits: 0,
+      remainingCredits: totalCredits,
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(),
+    },
+  })
 
   revalidatePath('/trainer/clients')
   revalidatePath(`/trainer/clients/${clientId}`)
@@ -115,12 +129,19 @@ export async function deductCredit(clientId: string) {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'TRAINER') throw new Error('No autorizado')
 
-  const credit = await prisma.userCredit.findFirst({ where: { userId: clientId } })
-  if (!credit || credit.balance <= 0) throw new Error('Sin créditos disponibles')
+  const credit = await prisma.userCredit.findFirst({
+    where: { clientId, status: 'ACTIVE', remainingCredits: { gt: 0 } },
+  })
+  if (!credit) throw new Error('Sin créditos disponibles')
 
   await prisma.userCredit.update({
     where: { id: credit.id },
-    data: { balance: credit.balance - 1 },
+    data: {
+      usedCredits: credit.usedCredits + 1,
+      remainingCredits: credit.remainingCredits - 1,
+      status: credit.remainingCredits - 1 <= 0 ? 'USED' : 'ACTIVE',
+      updatedAt: new Date(),
+    },
   })
 
   revalidatePath(`/trainer/clients/${clientId}`)

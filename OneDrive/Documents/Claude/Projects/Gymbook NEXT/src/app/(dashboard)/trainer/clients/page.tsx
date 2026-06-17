@@ -33,7 +33,7 @@ export default async function ClientsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {clients.map((c) => (
-            <ClientCard key={c.userId} client={c} />
+            <ClientCard key={c.id} client={c} />
           ))}
         </div>
       )}
@@ -42,13 +42,13 @@ export default async function ClientsPage() {
 }
 
 function ClientCard({ client }: { client: any }) {
-  const credits = client.UserCredit?.[0]?.balance ?? 0
+  const credits = client.userCredits?.[0]?.remainingCredits ?? 0
   const name = client.user.name ?? 'Sin nombre'
   const initials = name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
 
   return (
     <Link
-      href={`/trainer/clients/${client.userId}`}
+      href={`/trainer/clients/${client.id}`}
       className="card-hover group flex flex-col gap-4 cursor-pointer"
     >
       <div className="flex items-start justify-between">
@@ -85,13 +85,13 @@ function ClientCard({ client }: { client: any }) {
           className="px-2 py-0.5 rounded text-[10px] font-mono uppercase"
           style={{ background: 'rgb(30,30,30)', border: '1px solid rgb(39,39,42)' }}
         >
-          {(client.goal ?? 'GENERAL_FITNESS').replace('_', ' ')}
+          {((client.user as any)?.clientProfile?.fitnessGoal ?? 'GENERAL_FITNESS').replace('_', ' ')}
         </span>
         <span
           className="px-2 py-0.5 rounded text-[10px] font-mono uppercase"
           style={{ background: 'rgb(30,30,30)', border: '1px solid rgb(39,39,42)' }}
         >
-          {client.fitnessLevel ?? 'BEGINNER'}
+          {(client.user as any)?.clientProfile?.fitnessLevel ?? 'BEGINNER'}
         </span>
       </div>
 

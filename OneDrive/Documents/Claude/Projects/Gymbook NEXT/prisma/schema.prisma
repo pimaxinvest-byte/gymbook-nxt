@@ -1,6 +1,6 @@
 // ============================================================
-// GymBook NXT — Prisma Schema Unificado
-// Fase I: Training + Nutrition + Credits + Progress + Calendar
+// GymBook NXT — Prisma Schema v2 (Fase I completa)
+// Training + Nutrition + Credits + Progress + Calendar + Biometrics
 // Roles: TRAINER | CLIENT (sin Admin — primer trainer = Initial Owner)
 // ============================================================
 
@@ -13,10 +13,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────
 // ENUMS
-// ─────────────────────────────────────────
-
 enum Role {
   TRAINER
   CLIENT
@@ -94,125 +91,144 @@ enum MessageType {
   SYSTEM
 }
 
-// ─────────────────────────────────────────
 // ORGANIZATION (White-label support)
-// ─────────────────────────────────────────
-
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  logoUrl     String?
-  primaryColor String? @default("#3B82F6")
-  accentColor  String? @default("#EAB308")
-  website     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  primaryColor String?  @default("#3B82F6")
+  accentColor  String?  @default("#EAB308")
+  website      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  users       User[]
+  users        User[]
 
   @@map("organizations")
 }
 
-// ─────────────────────────────────────────
 // USER (Trainer + Client unified)
-// ─────────────────────────────────────────
-
 model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
+  id             String    @id @default(cuid())
+  email          String    @unique
   emailVerified  DateTime?
   passwordHash   String?
   name           String
   avatarUrl      String?
-  role           Role     @default(CLIENT)
-  isInitialOwner Boolean  @default(false) // primer trainer = owner completo
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  role           Role      @default(CLIENT)
+  isInitialOwner Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
-  // Perfil extendido
+  // Perfiles extendidos
   trainerProfile TrainerProfile?
   clientProfile  ClientProfile?
 
-  // Relaciones como trainer
-  clientsAsTrainer Client[] @relation("TrainerClients")
+  // Como trainer
+  clientsAsTrainer    Client[]         @relation("TrainerClients")
+  availabilitySlots   Availability[]   @relation("TrainerAvailabilitySlots")
+  availabilitySlotNew AvailabilitySlot[] @relation("TrainerSlots")
+  sessionsAsTrainer   Session[]        @relation("TrainerSessions")
+  clientTrainerLinks  ClientTrainer[]  @relation("TrainerLinks")
 
-  // Relaciones como cliente
-  clientRecord     Client?  @relation("ClientUser")
+  // Como cliente
+  clientRecord   Client?  @relation("ClientUser")
 
   // Mensajería
-  sentMessages     Message[] @relation("MessageSender")
+  sentMessages        Message[]      @relation("MessageSender")
+  trainerConversations Conversation[] @relation("TrainerConversations")
 
   @@map("users")
 }
 
-// ─────────────────────────────────────────
 // TRAINER PROFILE
-// ─────────────────────────────────────────
-
 model TrainerProfile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bio          String?
-  specialties  String[] // e.g. ["strength", "nutrition", "yoga"]
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio            String?
+  specialties    String[]
   certifications String[]
-  yearsExp     Int?
-  instagramUrl String?
-  calendlyUrl  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  yearsExp       Int?
+  instagramUrl   String?
+  calendlyUrl    String?
+  calendarColor  String   @default("#3B82F6")  // color del trainer en el calendario
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  availability TrainerAvailability[]
+  availability   TrainerAvailability[]
 
   @@map("trainer_profiles")
 }
 
-// ─────────────────────────────────────────
-// CLIENT PROFILE (Onboarding profundo)
-// ─────────────────────────────────────────
-
+// CLIENT PROFILE (Onboarding + CRM + Biometrics)
 model ClientProfile {
-  id             String      @id @default(cuid())
-  userId         String      @unique
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  userId         String       @unique
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Datos físicos
+  // ── Datos físicos básicos
   dateOfBirth    DateTime?
   gender         Gender?
+  sex            String?      // 'MALE' | 'FEMALE' — para cálculos biométricos
   heightCm       Float?
   weightKg       Float?
+  photoUrl       String?      // foto de perfil
 
-  // Metas y nivel
+  // ── Metas y nivel
   fitnessGoal    FitnessGoal?
   fitnessLevel   FitnessLevel?
   targetWeightKg Float?
+  activityLevel  String?      @default("MODERATE") // SEDENTARY|LIGHT|MODERATE|ACTIVE|VERY_ACTIVE
 
-  // Salud
+  // ── CRM / Datos de contacto
+  phone          String?
+  occupation     String?
+  morphology     String?      // 'ECTOMORPH'|'ENDOMORPH'|'MESOMORPH'
+
+  // ── Salud
+  pathologies    String?
+  medications    String?
   injuries       String[]
   medicalNotes   String?
-
-  // Preferencias alimentarias
-  dietaryRestrictions String[] // ["vegetarian", "gluten-free", ...]
   allergies      String[]
+  bloodType      String?
 
-  // Onboarding completo?
+  // ── Sueño y hábitos
+  sleepHours     Float?
+  menstrualCycle Boolean      @default(false)
+
+  // ── Nutrición / preferencias
+  dietaryRestrictions String[]
+  foodDislikes   String?
+  foodPreferences String?
+  supplementBudget Float?
+
+  // ── Entrenamiento / Logística
+  trainingHour   String?      // hora preferida
+  equipmentLimits String?
+
+  // ── Fuerza máxima (1RM reference)
+  maxBenchKg     Float?
+  maxSquatKg     Float?
+  maxDeadliftKg  Float?
+  gripStrengthKg Float?
+
+  // ── Onboarding
   onboardingCompleted Boolean @default(false)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@map("client_profiles")
 }
 
-// ─────────────────────────────────────────
 // CLIENT (Relación Trainer → Cliente)
-// ─────────────────────────────────────────
-
 model Client {
   id        String   @id @default(cuid())
   trainerId String
@@ -224,61 +240,84 @@ model Client {
   joinedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Credits
-  userCredits  UserCredit[]
+  // Créditos
+  userCredits      UserCredit[]
 
-  // Training
+  // Entrenamiento
   trainingPrograms TrainingProgram[]
 
-  // Nutrition
+  // Nutrición
   nutritionPlans   NutritionPlan[]
 
-  // Progress
+  // Progreso
   progressLogs     ProgressLog[]
+
+  // Fotos de progreso
+  photos           ClientPhoto[]
 
   // Mensajería
   conversations    Conversation[] @relation("ConversationClient")
 
+  // Sesiones
+  sessions         Session[]
+  sessionParticipants SessionParticipant[]
+
+  // Multi-trainer (hasta 3)
+  clientTrainers   ClientTrainer[] @relation("ClientTrainerLinks")
+
   @@map("clients")
 }
 
-// ─────────────────────────────────────────
+// CLIENT TRAINER (Multi-trainer junction — hasta 3 trainers por cliente)
+model ClientTrainer {
+  id         String   @id @default(cuid())
+  clientId   String
+  client     Client   @relation("ClientTrainerLinks", fields: [clientId], references: [id], onDelete: Cascade)
+  trainerId  String
+  trainer    User     @relation("TrainerLinks", fields: [trainerId], references: [id])
+  isPrimary  Boolean  @default(false)
+  assignedAt DateTime @default(now())
+
+  @@unique([clientId, trainerId])
+  @@map("client_trainers")
+}
+
 // CREDITS SYSTEM
-// ─────────────────────────────────────────
-
 model CreditPackage {
-  id          String            @id @default(cuid())
-  name        String            // "Pack 10 sesiones"
-  type        CreditPackageType
+  id           String            @id @default(cuid())
+  name         String
+  type         CreditPackageType
+  creditType   String            @default("PT") // 'PT' | 'SGT'
   totalCredits Int
-  price       Float
-  currency    String            @default("EUR")
-  validDays   Int?              // días de validez, null = sin límite
-  isActive    Boolean           @default(true)
-  description String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  price        Float
+  currency     String            @default("EUR")
+  validDays    Int?
+  isActive     Boolean           @default(true)
+  description  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
-  userCredits UserCredit[]
+  userCredits  UserCredit[]
 
   @@map("credit_packages")
 }
 
 model UserCredit {
-  id              String        @id @default(cuid())
-  clientId        String
-  client          Client        @relation(fields: [clientId], references: [id])
-  packageId       String
-  package         CreditPackage @relation(fields: [packageId], references: [id])
-  totalCredits    Int
-  usedCredits     Int           @default(0)
-  remainingCredits Int          // computed / maintained manually
-  status          CreditStatus  @default(ACTIVE)
-  purchasedAt     DateTime      @default(now())
-  expiresAt       DateTime?
-  updatedAt       DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id])
+  packageId        String
+  package          CreditPackage @relation(fields: [packageId], references: [id])
+  creditType       String        @default("PT") // 'PT' | 'SGT' — typed credits
+  totalCredits     Int
+  usedCredits      Int           @default(0)
+  remainingCredits Int
+  status           CreditStatus  @default(ACTIVE)
+  purchasedAt      DateTime      @default(now())
+  expiresAt        DateTime?
+  updatedAt        DateTime      @updatedAt
 
-  usageLogs CreditUsageLog[]
+  usageLogs        CreditUsageLog[]
 
   @@map("user_credits")
 }
@@ -289,29 +328,43 @@ model CreditUsageLog {
   userCredit   UserCredit @relation(fields: [userCreditId], references: [id])
   usedAt       DateTime   @default(now())
   notes        String?
-  sessionId    String?    // referencia a workout session si aplica
+  sessionId    String?
 
   @@map("credit_usage_logs")
 }
 
-// ─────────────────────────────────────────
-// TRAINING (Programs + Workouts + Exercises)
-// ─────────────────────────────────────────
+// ACTIVITY TYPES (PT, SGT, etc.)
+model ActivityType {
+  id              String    @id @default(cuid())
+  name            String    // "Entrenamiento Personal", "SGT Pequeño Grupo"
+  code            String    @unique // 'PT' | 'SGT'
+  maxParticipants Int       @default(1)
+  creditCost      Int       @default(1)
+  creditType      String    // 'PT' | 'SGT' — qué tipo de crédito consume
+  color           String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
 
+  sessions        Session[]
+
+  @@map("activity_types")
+}
+
+// TRAINING
 model TrainingProgram {
-  id          String        @id @default(cuid())
-  clientId    String
-  client      Client        @relation(fields: [clientId], references: [id])
-  name        String
-  description String?
-  status      ProgramStatus @default(ACTIVE)
-  startDate   DateTime?
-  endDate     DateTime?
+  id            String        @id @default(cuid())
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  name          String
+  description   String?
+  status        ProgramStatus @default(ACTIVE)
+  startDate     DateTime?
+  endDate       DateTime?
   durationWeeks Int?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  workouts    Workout[]
+  workouts      Workout[]
 
   @@map("training_programs")
 }
@@ -320,7 +373,7 @@ model Workout {
   id          String          @id @default(cuid())
   programId   String
   program     TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
-  name        String          // "Día A - Upper Body"
+  name        String
   dayOfWeek   DayOfWeek?
   weekNumber  Int?
   orderIndex  Int             @default(0)
@@ -337,8 +390,8 @@ model Workout {
 model Exercise {
   id           String   @id @default(cuid())
   name         String
-  muscleGroups String[] // ["chest", "triceps"]
-  equipment    String[] // ["barbell", "bench"]
+  muscleGroups String[]
+  equipment    String[]
   instructions String?
   videoUrl     String?
   imageUrl     String?
@@ -357,11 +410,11 @@ model WorkoutExercise {
   exercise    Exercise @relation(fields: [exerciseId], references: [id])
   orderIndex  Int      @default(0)
   sets        Int?
-  reps        String?  // "8-12" o "10" — flexible
+  reps        String?
   weightKg    Float?
   restSeconds Int?
-  tempo       String?  // "3-1-2-0"
-  rpe         Int?     // Rate of Perceived Exertion 1-10
+  tempo       String?
+  rpe         Int?
   notes       String?
 
   logs        ExerciseLog[]
@@ -400,42 +453,39 @@ model ExerciseLog {
   @@map("exercise_logs")
 }
 
-// ─────────────────────────────────────────
-// NUTRITION (unified with training)
-// ─────────────────────────────────────────
-
+// NUTRITION
 model NutritionPlan {
-  id          String        @id @default(cuid())
-  clientId    String
-  client      Client        @relation(fields: [clientId], references: [id])
-  name        String
-  description String?
-  status      ProgramStatus @default(ACTIVE)
+  id               String        @id @default(cuid())
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id])
+  name             String
+  description      String?
+  status           ProgramStatus @default(ACTIVE)
   caloriesTarget   Int?
   proteinGTarget   Float?
   carbsGTarget     Float?
   fatGTarget       Float?
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  startDate        DateTime?
+  endDate          DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  weeklyPlans WeeklyMealPlan[]
-  dailyIntakes DailyIntake[]
+  weeklyPlans      WeeklyMealPlan[]
+  dailyIntakes     DailyIntake[]
 
   @@map("nutrition_plans")
 }
 
 model WeeklyMealPlan {
-  id             String        @id @default(cuid())
+  id              String        @id @default(cuid())
   nutritionPlanId String
-  nutritionPlan  NutritionPlan @relation(fields: [nutritionPlanId], references: [id], onDelete: Cascade)
-  weekNumber     Int
-  name           String?       // "Semana 1 - Volumen"
-  notes          String?
-  createdAt      DateTime      @default(now())
+  nutritionPlan   NutritionPlan @relation(fields: [nutritionPlanId], references: [id], onDelete: Cascade)
+  weekNumber      Int
+  name            String?
+  notes           String?
+  createdAt       DateTime      @default(now())
 
-  mealEntries    WeeklyMealEntry[]
+  mealEntries     WeeklyMealEntry[]
 
   @@map("weekly_meal_plans")
 }
@@ -452,9 +502,9 @@ model Recipe {
   proteinG     Float?
   carbsG       Float?
   fatG         Float?
-  ingredients  Json     // [{name, amount, unit}]
+  ingredients  Json
   instructions String?
-  tags         String[] // ["high-protein", "quick", "vegetarian"]
+  tags         String[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -472,130 +522,303 @@ model WeeklyMealEntry {
   mealType       MealType
   recipeId       String?
   recipe         Recipe?        @relation(fields: [recipeId], references: [id])
-  customMealName String?        // si no hay receta asociada
+  customMealName String?
   notes          String?
 
   @@map("weekly_meal_entries")
 }
 
 model DailyIntake {
-  id             String        @id @default(cuid())
+  id              String        @id @default(cuid())
   nutritionPlanId String
-  nutritionPlan  NutritionPlan @relation(fields: [nutritionPlanId], references: [id])
-  date           DateTime      @db.Date
-  totalCalories  Int?
-  totalProteinG  Float?
-  totalCarbsG    Float?
-  totalFatG      Float?
-  waterMl        Int?
-  notes          String?
-  createdAt      DateTime      @default(now())
+  nutritionPlan   NutritionPlan @relation(fields: [nutritionPlanId], references: [id])
+  date            DateTime      @db.Date
+  totalCalories   Int?
+  totalProteinG   Float?
+  totalCarbsG     Float?
+  totalFatG       Float?
+  waterMl         Int?
+  notes           String?
+  createdAt       DateTime      @default(now())
 
-  meals          DailyMeal[]
+  meals           DailyMeal[]
 
   @@unique([nutritionPlanId, date])
   @@map("daily_intakes")
 }
 
 model DailyMeal {
-  id           String      @id @default(cuid())
+  id            String      @id @default(cuid())
   dailyIntakeId String
-  dailyIntake  DailyIntake @relation(fields: [dailyIntakeId], references: [id], onDelete: Cascade)
-  mealType     MealType
-  recipeId     String?
-  recipe       Recipe?     @relation(fields: [recipeId], references: [id])
-  customName   String?
-  calories     Int?
-  proteinG     Float?
-  carbsG       Float?
-  fatG         Float?
-  servings     Float       @default(1)
-  loggedAt     DateTime    @default(now())
+  dailyIntake   DailyIntake @relation(fields: [dailyIntakeId], references: [id], onDelete: Cascade)
+  mealType      MealType
+  recipeId      String?
+  recipe        Recipe?     @relation(fields: [recipeId], references: [id])
+  customName    String?
+  calories      Int?
+  proteinG      Float?
+  carbsG        Float?
+  fatG          Float?
+  servings      Float       @default(1)
+  loggedAt      DateTime    @default(now())
 
   @@map("daily_meals")
 }
 
 // ─────────────────────────────────────────
-// PROGRESS LOGS
+// PROGRESS TRACKING
 // ─────────────────────────────────────────
 
 model ProgressLog {
-  id          String   @id @default(cuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id])
-  date        DateTime @db.Date
-  weightKg    Float?
-  bodyFatPct  Float?
-  muscleMassKg Float?
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Medidas corporales (cm)
-  chestCm     Float?
-  waistCm     Float?
-  hipsCm      Float?
-  leftArmCm   Float?
-  rightArmCm  Float?
-  leftLegCm   Float?
-  rightLegCm  Float?
+  // Peso
+  weightKg          Float?
+  wednesdayWeightKg Float?
 
-  // Fuerza (para seguimiento de progresión)
-  benchPressKg Float?
-  squatKg      Float?
-  deadliftKg   Float?
+  // Perimetros (cm)
+  neckCm          Float?
+  armRelaxedCm    Float?
+  armFlexedCm     Float?
+  chestCm         Float?
+  waistCm         Float?
+  abdomenCm       Float?
+  hipCm           Float?
+  thighRelaxedCm  Float?
+  thighFlexedCm   Float?
+  calfCm          Float?
 
-  photoUrls   String[]
-  notes       String?
-  createdAt   DateTime @default(now())
+  // Pliegues cutaneos (mm)
+  tricepFoldMm       Float?
+  subscapularFoldMm  Float?
+  abdominalFoldMm    Float?
+  suprailiacFoldMm   Float?
+  thighFoldMm        Float?
+
+  // % Graso
+  bodyFatNavy     Float?
+  bodyFatSkinfold Float?
+  bodyFatBioImp   Float?
+  bodyFatPct      Float?
+
+  // Composicion corporal
+  fatKg      Float?
+  leanMassKg Float?
+  ffmi       Float?
+
+  // CSA
+  csaArm   Float?
+  csaThigh Float?
+
+  // Cardiovascular
+  bloodPressure String?
+  restingHR     Int?
+
+  // Bienestar
+  fatigueLevel   Int?
+  recoveryLevel  Int?
+  sorenessScore  Int?
+  isImproving    Boolean?
+  sleepHours     Float?
+  sleepQuality   Int?
+  energyLevel    Int?
+  libido         Int?
+  moodScore      Int?
+  stressLevel    Int?
+  hrv            Float?
+  recoveryScore  Float?
+
+  // Adherencia
+  dietFollowUp     Int?
+  trainingFollowUp Int?
+
+  // Notas
+  notes           String?
+  structuralNotes String?
+  injuriesNotes   String?
+  nextGoal        String?
 
   @@unique([clientId, date])
   @@map("progress_logs")
 }
 
 // ─────────────────────────────────────────
-// TRAINER AVAILABILITY / CALENDAR
+// CLIENT PHOTOS
+// ─────────────────────────────────────────
+
+model ClientPhoto {
+  id           String           @id @default(cuid())
+  clientId     String
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  date         DateTime         @db.Date
+  perspective  PhotoPerspective
+  url          String
+  thumbnailUrl String?
+  notes        String?
+  createdAt    DateTime         @default(now())
+
+  @@map("client_photos")
+}
+
+enum PhotoPerspective {
+  FRONT
+  BACK
+  LEFT
+  RIGHT
+}
+
+
+// ─────────────────────────────────────────
+// AVAILABILITY (weekly recurring — trainer)
+// ─────────────────────────────────────────
+
+model Availability {
+  id          String   @id @default(cuid())
+  trainerId   String
+  trainer     User     @relation("TrainerAvailabilitySlots", fields: [trainerId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int      // 0=Dom 1=Lun ... 6=Sab
+  startTime   String   // "09:00"
+  endTime     String   // "18:00"
+  isRecurring Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+
+  @@map("availability")
+}
+
+// ─────────────────────────────────────────
+// TRAINER AVAILABILITY (from TrainerProfile)
 // ─────────────────────────────────────────
 
 model TrainerAvailability {
-  id              String         @id @default(cuid())
+  id               String        @id @default(cuid())
   trainerProfileId String
-  trainerProfile  TrainerProfile @relation(fields: [trainerProfileId], references: [id], onDelete: Cascade)
-  dayOfWeek       DayOfWeek
-  startTime       String         // "09:00"
-  endTime         String         // "18:00"
-  isAvailable     Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  trainerProfile   TrainerProfile @relation(fields: [trainerProfileId], references: [id], onDelete: Cascade)
+  dayOfWeek        Int           // 0=Dom 1=Lun ... 6=Sab
+  startTime        String        // "09:00"
+  endTime          String        // "18:00"
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
 
-  @@unique([trainerProfileId, dayOfWeek])
   @@map("trainer_availability")
 }
 
 // ─────────────────────────────────────────
-// COMMUNICATION (Messaging)
+// AVAILABILITY SLOT (date-specific hourly)
+// ─────────────────────────────────────────
+
+model AvailabilitySlot {
+  id              String    @id @default(cuid())
+  trainerId       String
+  trainer         User      @relation("TrainerSlots", fields: [trainerId], references: [id], onDelete: Cascade)
+  date            DateTime  @db.Date
+  startHour       Int       // 8, 9, 10 ... 20
+  isOpen          Boolean   @default(true)
+  clonedFromWeek  Int?      // week number this slot was cloned from
+
+  bookings        Session[]
+
+  @@unique([trainerId, date, startHour])
+  @@map("availability_slots")
+}
+
+// ─────────────────────────────────────────
+// SESSION (booking)
+// ─────────────────────────────────────────
+
+model Session {
+  id              String    @id @default(cuid())
+  trainerId       String
+  trainer         User      @relation("TrainerSessions", fields: [trainerId], references: [id])
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id])
+  slotId          String?
+  slot            AvailabilitySlot? @relation(fields: [slotId], references: [id])
+  activityTypeId  String?
+  activityType    ActivityType? @relation(fields: [activityTypeId], references: [id])
+  scheduledAt     DateTime
+  type            String    @default("PT")  // 'PT' | 'SGT' | etc.
+  creditType      String?   // 'PT' | 'SGT'
+  creditUsed      Boolean   @default(false)
+  status          String    @default("SCHEDULED") // SCHEDULED | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  participants    SessionParticipant[]
+
+  @@map("sessions")
+}
+
+// ─────────────────────────────────────────
+// SESSION PARTICIPANT (SGT multi-client)
+// ─────────────────────────────────────────
+
+model SessionParticipant {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id])
+  status    String  @default("CONFIRMED") // CONFIRMED | CANCELLED | NO_SHOW
+
+  @@unique([sessionId, clientId])
+  @@map("session_participants")
+}
+
+// ─────────────────────────────────────────
+// CONVERSATION (messaging thread)
 // ─────────────────────────────────────────
 
 model Conversation {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   clientId  String
-  client    Client   @relation("ConversationClient", fields: [clientId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  client    Client    @relation("ConversationClient", fields: [clientId], references: [id])
+  trainerId String
+  trainer   User      @relation("TrainerConversations", fields: [trainerId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   messages  Message[]
 
+  @@unique([clientId, trainerId])
   @@map("conversations")
 }
 
+// ─────────────────────────────────────────
+// MESSAGE
+// ─────────────────────────────────────────
+
 model Message {
-  id             String       @id @default(cuid())
+  id             String      @id @default(cuid())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  sender         User        @relation("MessageSender", fields: [senderId], references: [id])
   content        String
-  type           MessageType  @default(TEXT)
-  fileUrl        String?
-  readAt         DateTime?
-  createdAt      DateTime     @default(now())
+  type           MessageType @default(TEXT)
+  isRead         Boolean     @default(false)
+  createdAt      DateTime    @default(now())
 
   @@map("messages")
+}
+
+// ─────────────────────────────────────────
+// PUBLIC HOLIDAY
+// ─────────────────────────────────────────
+
+// PUBLIC HOLIDAY
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  name      String
+  scope     String   // NATIONAL | ANDALUCIA | TORREMOLINOS
+  year      Int
+
+  @@unique([date, scope])
+  @@map("public_holidays")
 }
